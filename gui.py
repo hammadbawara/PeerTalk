@@ -18,7 +18,7 @@ class ChatApp(ctk.CTk):
         self.btn_chat = ctk.CTkButton(self.sidebar, text="Chat", command=self.show_chat_list)
         self.btn_chat.pack(pady=10)
 
-        self.btn_discover = ctk.CTkButton(self.sidebar, text="Discover")
+        self.btn_discover = ctk.CTkButton(self.sidebar, text="Discover", command=self.show_discover_page)
         self.btn_discover.pack(pady=10)
 
         self.main_frame = ctk.CTkFrame(self)
@@ -26,16 +26,13 @@ class ChatApp(ctk.CTk):
 
         self.chat_users_frame = None
         self.chat_page_frame = None
-
+        self.discover_frame = None
         self.current_user = None
+
         self.show_chat_list()
 
     def show_chat_list(self):
-        if self.chat_page_frame:
-            self.chat_page_frame.destroy()
-
-        if self.chat_users_frame:
-            self.chat_users_frame.destroy()
+        self.clear_main_frame()
 
         self.chat_users_frame = ctk.CTkFrame(self.main_frame)
         self.chat_users_frame.pack(expand=True, fill="both")
@@ -47,12 +44,7 @@ class ChatApp(ctk.CTk):
 
     def open_chat(self, user):
         self.current_user = user
-
-        if self.chat_users_frame:
-            self.chat_users_frame.destroy()
-
-        if self.chat_page_frame:
-            self.chat_page_frame.destroy()
+        self.clear_main_frame()
 
         self.chat_page_frame = ctk.CTkFrame(self.main_frame)
         self.chat_page_frame.pack(expand=True, fill="both")
@@ -113,11 +105,72 @@ class ChatApp(ctk.CTk):
             self.load_chat(self.current_user['id'])
 
     def upload_file(self):
-        print("Upload file clicked")  # Dummy handler
+        print("Upload file clicked")
 
     def update_ui(self):
         if self.current_user:
             self.load_chat(self.current_user['id'])
+
+    def clear_main_frame(self):
+        for widget in self.main_frame.winfo_children():
+            widget.destroy()
+
+    def show_discover_page(self):
+        self.clear_main_frame()
+        self.discover_frame = ctk.CTkFrame(self.main_frame)
+        self.discover_frame.pack(expand=True, fill="both")
+
+        switch_frame = ctk.CTkFrame(self.discover_frame)
+        switch_frame.pack(fill="x", pady=10)
+
+        self.discovery_switch = ctk.CTkSwitch(switch_frame, text="Enable Discovery", command=self.toggle_discovery)
+        self.discovery_switch.pack(side="left", padx=10)
+
+        self.options_frame = ctk.CTkFrame(self.discover_frame)
+        self.options_frame.pack(fill="x", padx=10, pady=5)
+        self.options_frame.pack_forget()
+
+        self.refresh_button = ctk.CTkButton(self.options_frame, text="Refresh", command=self.refresh_peers)
+        self.refresh_button.pack(side="left", padx=5)
+
+        self.manual_button = ctk.CTkButton(self.options_frame, text="Enter Manually", command=self.enter_peer_manually)
+        self.manual_button.pack(side="left", padx=5)
+
+        self.available_label = ctk.CTkLabel(self.discover_frame, text="Available Peers")
+        self.available_list_frame = ctk.CTkFrame(self.discover_frame)
+
+    def toggle_discovery(self):
+        if self.discovery_switch.get():
+            self.options_frame.pack(fill="x", padx=10, pady=5)
+            self.available_label.pack(pady=(10, 0))
+            self.available_list_frame.pack(fill="both", expand=True)
+            self.refresh_peers()
+        else:
+            self.options_frame.pack_forget()
+            self.available_label.pack_forget()
+            self.available_list_frame.pack_forget()
+
+    def refresh_peers(self):
+        for widget in self.available_list_frame.winfo_children():
+            widget.destroy()
+
+        peers = self.logic.get_discovered_peers()
+        for peer in peers:
+            ctk.CTkButton(self.available_list_frame, text=peer['name'], command=lambda p=peer: self.request_connection_ui(p)).pack(pady=5, padx=10, anchor="w")
+
+    def enter_peer_manually(self):
+        print("Manual peer entry clicked")
+
+    def request_connection_ui(self, peer):
+        self.clear_main_frame()
+
+        request_frame = ctk.CTkFrame(self.main_frame)
+        request_frame.pack(expand=True, fill="both", pady=20)
+
+        ctk.CTkLabel(request_frame, text=f"Requesting {peer['name']} for connection", font=("Arial", 16)).pack(pady=10)
+        ctk.CTkLabel(request_frame, text=f"Unique Code: {self.logic.get_connection_code(peer['id'])}", font=("Arial", 14)).pack(pady=10)
+
+        ctk.CTkButton(request_frame, text="Cancel", command=self.show_discover_page).pack(pady=10)
 
 if __name__ == '__main__':
     app = ChatApp()
