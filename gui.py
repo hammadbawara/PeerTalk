@@ -1,7 +1,7 @@
 # ui.py
 import threading
 import customtkinter as ctk
-from logic import ChatLogic
+from service import ChatService, ConnectionSuccess, ConnectionFailure
 
 class ChatApp(ctk.CTk):
     def __init__(self):
@@ -9,7 +9,7 @@ class ChatApp(ctk.CTk):
         self.title("Local Network Chat")
         self.geometry("800x600")
 
-        self.logic = ChatLogic(ui_callback=self.update_ui)
+        self.logic = ChatService(ui_callback=self.handle_logic_callback)
         threading.Thread(target=self.logic.run, daemon=True).start()
 
         self.sidebar = ctk.CTkFrame(self, width=200)
@@ -39,8 +39,11 @@ class ChatApp(ctk.CTk):
 
         users = self.logic.get_users()
         for user in users:
-            ctk.CTkButton(self.chat_users_frame, text=f"{user['name']} ({'Online' if user['online'] else 'Offline'})", 
-                          command=lambda u=user: self.open_chat(u)).pack(pady=5)
+            ctk.CTkButton(
+                self.chat_users_frame,
+                text=f"{user['name']} ({'Online' if user['online'] else 'Offline'})",
+                command=lambda u=user: self.open_chat(u)
+            ).pack(pady=5)
 
     def open_chat(self, user):
         self.current_user = user
@@ -54,7 +57,11 @@ class ChatApp(ctk.CTk):
 
         ctk.CTkButton(top_bar, text="Back", command=self.show_chat_list).pack(side="left", padx=5, pady=5)
         ctk.CTkLabel(top_bar, text=user['name']).pack(side="left", padx=5)
-        ctk.CTkLabel(top_bar, text="Online" if user['online'] else "Offline", text_color="green" if user['online'] else "red").pack(side="left")
+        ctk.CTkLabel(
+            top_bar,
+            text="Online" if user['online'] else "Offline",
+            text_color="green" if user['online'] else "red"
+        ).pack(side="left")
 
         chat_container = ctk.CTkFrame(self.chat_page_frame)
         chat_container.pack(expand=True, fill="both")
@@ -107,9 +114,18 @@ class ChatApp(ctk.CTk):
     def upload_file(self):
         print("Upload file clicked")
 
-    def update_ui(self):
-        if self.current_user:
-            self.load_chat(self.current_user['id'])
+    def handle_logic_callback(self, result=None):
+        if isinstance(result, ConnectionSuccess):
+            self.open_chat(result.user)
+        elif isinstance(result, ConnectionFailure):
+            self.show_connection_failure(result.reason)
+
+    def show_connection_failure(self, reason):
+        self.clear_main_frame()
+        frame = ctk.CTkFrame(self.main_frame)
+        frame.pack(expand=True)
+        ctk.CTkLabel(frame, text=f"Connection Failed: {reason}").pack(pady=10)
+        ctk.CTkButton(frame, text="Back", command=self.show_discover_page).pack(pady=10)
 
     def clear_main_frame(self):
         for widget in self.main_frame.winfo_children():
@@ -156,21 +172,31 @@ class ChatApp(ctk.CTk):
 
         peers = self.logic.get_discovered_peers()
         for peer in peers:
-            ctk.CTkButton(self.available_list_frame, text=peer['name'], command=lambda p=peer: self.request_connection_ui(p)).pack(pady=5, padx=10, anchor="w")
+            ctk.CTkButton(self.available_list_frame, text=peer['name'], command=lambda p=peer: self.show_connecting_ui(p)).pack(pady=5, padx=10, anchor="w")
 
     def enter_peer_manually(self):
-        print("Manual peer entry clicked")
+        dialog = ctk.CTkInputDialog(text="Enter IP Address:", title="Manual Connection")
+        ip = dialog.get_input()
+        if ip:
+            self.show_connecting_ui({'name': ip, 'id': ip})
 
-    def request_connection_ui(self, peer):
+    def show_connecting_ui(self, peer):
         self.clear_main_frame()
-
         request_frame = ctk.CTkFrame(self.main_frame)
         request_frame.pack(expand=True, fill="both", pady=20)
 
-        ctk.CTkLabel(request_frame, text=f"Requesting {peer['name']} for connection", font=("Arial", 16)).pack(pady=10)
-        ctk.CTkLabel(request_frame, text=f"Unique Code: {self.logic.get_connection_code(peer['id'])}", font=("Arial", 14)).pack(pady=10)
+        self.connecting_label = ctk.CTkLabel(request_frame, text=f"Requesting {peer['name']} for connection...", font=("Arial", 16))
+        self.connecting_label.pack(pady=10)
+
+        self.code_label = ctk.CTkLabel(request_frame, text=f"Unique Code: {self.logic.get_connection_code(peer['id'])}", font=("Arial", 14))
+        self.code_label.pack(pady=10)
+
+        self.spinner = ctk.CTkLabel(request_frame, text="Connecting ⏳")
+        self.spinner.pack(pady=10)
 
         ctk.CTkButton(request_frame, text="Cancel", command=self.show_discover_page).pack(pady=10)
+
+        threading.Thread(target=self.logic.connect_to_peer, args=(peer['id'],), daemon=True).start()
 
 if __name__ == '__main__':
     app = ChatApp()
