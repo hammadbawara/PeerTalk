@@ -7,6 +7,7 @@ from objects import *
 class ChatService:
     def __init__(self, ui_callback):
         self.ui_callback = ui_callback
+        self.discovery = None  # Not started by default
         self.users = {
             '1': User('1', 'Alice', True, '192.168.1.2', 5000, 'KEY123'),
             '2': User('2', 'Bob', False, '192.168.1.3', 5001, 'KEY456'),
@@ -24,7 +25,24 @@ class ChatService:
             '14': User('14', 'Peggy', True, '192.168.1.15', 5013, 'KEY654B'),
             '15': User('15', 'Sybil', False, '192.168.1.16', 5014, 'KEY789C'),
         }
+    def start_discovery(self):
+        from peer_discovery import PeerDiscovery  # Avoid circular import
+        if self.discovery is None:
+            self.discovery = PeerDiscovery(on_peer_found=self.add_peer)
+            self.discovery.start()
 
+    def stop_discovery(self):
+        if self.discovery:
+            self.discovery.running = False
+            self.discovery = None
+
+    def add_peer(self, ip):
+        if ip not in self.users:
+            peer_id = ip
+            name = f"Peer {ip.split('.')[-1]}"
+            user = User(user_id=peer_id, name=name, online=True, ip_address=ip, port=5000, connection_key="KEY")
+            self.users[peer_id] = user
+            self.ui_callback('peer_discovered')  # Tell GUI to refresh
 
     def run(self):
         # Placeholder thread runner

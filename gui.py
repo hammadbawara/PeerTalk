@@ -6,6 +6,7 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from objects import User
 import socket
+import time
 
 # Load icons
 home_icon_white = ctk.CTkImage(Image.open("Assets/homeIconWhite.png"), size=(20, 20))
@@ -433,6 +434,9 @@ class ChatApp(ctk.CTk):
             self.open_chat(result.user)
         elif isinstance(result, ConnectionFailure):
             self.show_connection_failure(result.reason)
+        elif result == 'peer_discovered':
+            # Refresh UI from main thread
+            self.after(100, self.refresh_peers)
 
     def show_connection_failure(self, reason):
         self.clear_main_frame()
@@ -469,24 +473,50 @@ class ChatApp(ctk.CTk):
         self.available_label = ctk.CTkLabel(self.discover_frame, text="Available Peers")
         self.available_list_frame = ctk.CTkFrame(self.discover_frame)
 
+    def start_discovery_session(self):
+     if getattr(self, 'discovery_timer_active', False):
+        return  # Already running
+     self.discovery_started_at = time.time()
+     self.discovery_timer_active = True
+     self.check_discovery_timeout()
+
+
     def toggle_discovery(self):
         if self.discovery_switch.get():
+            self.logic.start_discovery()
+
             self.options_frame.pack(fill="x", padx=10, pady=5)
+            self.available_label.configure(text="Discovering peers...")
             self.available_label.pack(pady=(10, 0))
             self.available_list_frame.pack(fill="both", expand=True)
+
+            self.start_discovery_session()
+
             self.refresh_peers()
         else:
+            self.logic.stop_discovery()
             self.options_frame.pack_forget()
             self.available_label.pack_forget()
             self.available_list_frame.pack_forget()
 
     def refresh_peers(self):
-        for widget in self.available_list_frame.winfo_children():
-            widget.destroy()
+     self.logic.stop_discovery()
+     self.logic.start_discovery()
 
-        peers = self.logic.get_discovered_peers()
-        for peer in peers:
-            ctk.CTkButton(self.available_list_frame, text=peer['name'], command=lambda p=peer: self.show_connecting_ui(p)).pack(pady=5, padx=10, anchor="w")
+     self.available_label.configure(text="Discovering peers...")
+     self.start_discovery_session()
+     for widget in self.available_list_frame.winfo_children():
+        widget.destroy()
+
+     peers = self.logic.get_discovered_peers()
+     if peers:
+        self.available_label.configure(text="Available Peers:")
+     else:
+        if not getattr(self, 'discovery_timer_active', False):
+            self.available_label.configure(text="No peers found ❌")
+
+     for peer in peers:
+        ctk.CTkButton(self.available_list_frame, text=peer['name'], command=lambda p=peer: self.show_connecting_ui(p)).pack(pady=5, padx=10, anchor="w")
 
     def enter_peer_manually(self):
         dialog = ctk.CTkInputDialog(text="Enter IP Address:", title="Manual Connection")
@@ -511,6 +541,24 @@ class ChatApp(ctk.CTk):
         ctk.CTkButton(request_frame, text="Cancel", command=self.show_discover_page).pack(pady=10)
 
         threading.Thread(target=self.logic.connect_to_peer, args=(peer['id'],), daemon=True).start()
+
+    def check_discovery_timeout(self):
+     if not getattr(self, 'discovery_timer_active', False):
+        return
+
+     elapsed = time.time() - self.discovery_started_at
+     if elapsed >= 10:
+        self.discovery_timer_active = False
+        self.logic.stop_discovery()
+        peers = self.logic.get_discovered_peers()
+
+        if not peers:
+            self.available_label.configure(text="No peers found ❌")
+        else:
+            self.available_label.configure(text="Available Peers:")
+            self.discovery_timer_active = False
+     else:
+        self.after(500, self.check_discovery_timeout)
 
 if __name__ == '__main__':
     app = ChatApp()
