@@ -2,7 +2,7 @@
 import time
 import random
 import threading
-from objects import *
+from models import *
 
 class ChatService:
     def __init__(self, ui_callback):

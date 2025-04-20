@@ -4,7 +4,7 @@ import customtkinter as ctk
 from service import ChatService, ConnectionSuccess, ConnectionFailure
 from PIL import Image, ImageTk
 import tkinter as tk
-from objects import User
+from models import User
 import socket
 import time
 
