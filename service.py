@@ -84,6 +84,7 @@ class ChatService:
 
         logger.debug(f"Initialized ChatService with user_id={self.user_id}, username={self.username}")
 
+
     def run(self):
         self.active_port = self._find_open_port()
         logger.info(f"Service running on port {self.active_port}")
