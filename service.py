@@ -174,27 +174,24 @@ class ChatService:
 
             self.db_manager.send_message(sender_id=user_id, receiver_id=self.user_id, content=content)
 
-            if user_id not in self.peers:
-                existing_messages = self.peers[user_id]['messages'] if user_id in self.peers else self.db_manager.get_messages(user_id)
+            if user_id in self.peers:
 
                 self.peers[user_id] = {
                     'id': user_id,
                     'name': f"User-{user_id[:5]}",
                     'ip_address': 'unknown',
                     'port': 0,
-                    'messages': existing_messages,
+                    'messages': self.get_existing_messages(user_id),
                     'online': True
                 }
 
-
-            # Notify UI to refresh
             self.ui_callback({'type': 'new_message', 'from': user_id, 'content': content})
 
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
 
     def get_existing_messages(self, peer_id):
-        return self.peers[peer_id]['messages'] if peer_id in self.peers else self.db_manager.get_messages(peer_id)
+        return self.db_manager.get_messages(peer_id)
 
 
     def _handle_connection_request(self, sock, message):
@@ -289,6 +286,7 @@ class ChatService:
 
     def fetch_messages(self, user_id):
         user = self.peers.get(user_id)
+        print(user)
         if user:
             return [{'from': msg.sender_id, 'message': msg.content} for msg in user['messages']]
         return []
