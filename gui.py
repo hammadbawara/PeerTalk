@@ -119,6 +119,18 @@ class ChatApp(ctk.CTk):
             self.open_chat(result.user)
         elif isinstance(result, ConnectionFailure):
             self.show_connection_failure(result.reason)
+        elif isinstance(result, dict) and result.get('type') == 'incoming_request':
+            self.show_incoming_request_ui(result['peer'])
+        elif isinstance(result, dict) and result.get('type') == 'connection_response_sent':
+            if result['accepted']:
+                self.open_chat(result['peer'])
+            else:
+                self.show_discover_page()
+
+        elif isinstance(result, dict) and result.get('type') == 'new_message':
+            from_user_id = result['from']
+            if self.current_user and self.current_user['id'] == from_user_id:
+                self.load_chat(from_user_id)
 
     def show_connection_failure(self, reason):
         self.clear_main_frame()
@@ -197,6 +209,24 @@ class ChatApp(ctk.CTk):
         ctk.CTkButton(request_frame, text="Cancel", command=self.show_discover_page).pack(pady=10)
 
         threading.Thread(target=self.logic.connect_to_peer, args=(peer['id'],), daemon=True).start()
+
+    def show_incoming_request_ui(self, peer):
+        self.clear_main_frame()
+        frame = ctk.CTkFrame(self.main_frame)
+        frame.pack(expand=True)
+
+        ctk.CTkLabel(frame, text=f"{peer['name']} wants to connect.", font=("Arial", 16)).pack(pady=10)
+
+        ctk.CTkButton(frame, text="Accept", command=lambda: self.accept_connection(peer)).pack(pady=5)
+        ctk.CTkButton(frame, text="Reject", command=lambda: self.reject_connection(peer)).pack(pady=5)
+
+    def accept_connection(self, peer):
+        self.logic.respond_to_connection(peer['id'], accept=True)
+
+    def reject_connection(self, peer):
+        self.logic.respond_to_connection(peer['id'], accept=False)
+
+
 
 if __name__ == '__main__':
     app = ChatApp()
