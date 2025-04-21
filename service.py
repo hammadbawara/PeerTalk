@@ -32,48 +32,53 @@ PROTOCOL = {
     'CONNECTION_ACCEPT': 'CON_ACC',
     'CONNECTION_REJECT': 'CON_REJ',
 }
-KEY_FILE = "chat_key.key" 
+
+# --- Files ----
+os.makedirs("data", exist_ok=True)
+KEY_FILE_PATH = "data/chat_key.key" 
+CONFIG_FILE_PATH = "data/user_config.json"
+DB_FILE_PATH = "data/chat_db.db"
+
+
 def _load_or_generate_key():
         """Loads the Fernet key from a file or generates a new one if the file doesn't exist."""
-        if os.path.exists(KEY_FILE):
+        if os.path.exists(KEY_FILE_PATH):
             try:
-                with open(KEY_FILE, "rb") as key_file:
+                with open(KEY_FILE_PATH, "rb") as key_file:
                     key = key_file.read()
-                    logger.info(f"Loaded Fernet key from {KEY_FILE}")
+                    logger.info(f"Loaded Fernet key from {KEY_FILE_PATH}")
                     return key
             except Exception as e:
-                logger.error(f"Error loading key from {KEY_FILE}: {e}")
+                logger.error(f"Error loading key from {KEY_FILE_PATH}: {e}")
                 logger.info("Generating a new Fernet key.")
                 return _generate_and_save_key()
         else:
-            logger.info(f"{KEY_FILE} not found. Generating a new Fernet key.")
+            logger.info(f"{KEY_FILE_PATH} not found. Generating a new Fernet key.")
             return _generate_and_save_key()
 
 def _generate_and_save_key():
     """Generates a new Fernet key and saves it to a file."""
     key = Fernet.generate_key()
     try:
-        with open(KEY_FILE, "wb") as key_file:
+        with open(KEY_FILE_PATH, "wb") as key_file:
             key_file.write(key)
-        logger.info(f"Generated and saved Fernet key to {KEY_FILE}")
+        logger.info(f"Generated and saved Fernet key to {KEY_FILE_PATH}")
         return key
     except Exception as e:
-        logger.error(f"Error saving key to {KEY_FILE}: {e}")
+        logger.error(f"Error saving key to {KEY_FILE_PATH}: {e}")
         return key
 
 
 class ChatService:
     def __init__(self, ui_callback):
         self.ui_callback = ui_callback
-        self.user_id = "1"
-        #self.username = socket.gethostname()
-        self.username = "user1"
+        self.username, self.user_id = self.load_or_create_user_config()
         self.peers = {}
         self.active_port = None
         self.listener_thread = None
         self.key = _load_or_generate_key()
         self.cipher = Fernet(self.key)
-        self.db_manager = DatabaseManagement()
+        self.db_manager = DatabaseManagement(DB_FILE_PATH)
         self.db_manager.setup_database()
 
         saved_peers = self.db_manager.get_all_peers()
@@ -91,6 +96,27 @@ class ChatService:
         self.listener_thread = threading.Thread(target=self._listen_for_connections, daemon=True)
         self.listener_thread.start()
         self._periodic_discovery()
+
+    def load_or_create_user_config(self):
+        if os.path.exists(CONFIG_FILE_PATH):
+            with open(CONFIG_FILE_PATH, "r") as file:
+                config = json.load(file)
+                if "username" in config and "user_id" in config:
+                    return config["username"], config["user_id"]
+
+        # Create new user credentials
+        user_id = str(uuid.uuid4())
+        username = f"user_{user_id[:8]}"
+
+        config = {
+            "username": username,
+            "user_id": user_id
+        }
+
+        with open(CONFIG_FILE_PATH, "w") as file:
+            json.dump(config, file, indent=4)
+
+        return username, user_id
 
 
     def _find_open_port(self):
