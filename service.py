@@ -257,11 +257,11 @@ class ChatService:
             time.sleep(10)
 
     def _scan_ports(self):
-        base_ip = "127.0.0.1"
+        base_ip = "10.81.110.22"
         logger.debug("Starting peer discovery scan...")
         for port in range(4400, 4406):
-            if port == self.active_port:
-                continue
+            # if port == self.active_port:
+            #     continue
             try:
                 with socket.create_connection((base_ip, port), timeout=2) as sock:
                     hello = json.dumps({
